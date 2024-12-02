@@ -157,7 +157,7 @@ class AstuteRAG:
 
 def main():
     # API 키 설정
-    api_key = "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"  # 여기에 실제 API 키를 입력하세요
+    api_key = "your-openai-api"  # 여기에 실제 API 키를 입력하세요
     
     # AstuteRAG 초기화
     rag = AstuteRAG(
@@ -219,15 +219,6 @@ def main():
         except Exception as e:
             print(f"Error: {str(e)}")
     
-    print("\n=== RAG Improvements Analysis ===")
-    print("\nKey Benefits of Using RAG:")
-    print("1. Enhanced Accuracy: Combines LLM's internal knowledge with external sources")
-    print("2. Source Verification: Answers are grounded in specific retrieved documents")
-    print("3. Up-to-date Information: Can leverage current information from external sources")
-    print("4. Reduced Hallucination: Less likely to generate incorrect information")
-    print("5. Knowledge Conflict Resolution: Systematically handles contradictions between sources")
-    print("6. Transparent Reasoning: Can trace how answers are derived from sources")
-    print("\nNote: The actual improvements may vary depending on the specific question and retrieved documents.")
 
 if __name__ == "__main__":
     main()
