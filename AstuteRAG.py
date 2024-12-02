@@ -1,7 +1,8 @@
 from typing import List, Dict, Tuple, Optional
 import json
 from dataclasses import dataclass
-import openai
+from openai import OpenAI
+import os
 
 @dataclass
 class Document:
@@ -10,23 +11,38 @@ class Document:
     doc_id: str
 
 class AstuteRAG:
-    def __init__(self, llm_model: str = "gpt-4", max_generated_passages: int = 1):
+    def __init__(self, api_key: str, model: str = "gpt-4", max_generated_passages: int = 1):
         """
         Initialize AstuteRAG
         Args:
-            llm_model: The LLM model to use
+            api_key: OpenAI API key
+            model: The model to use (e.g., "gpt-4", "gpt-3.5-turbo")
             max_generated_passages: Maximum number of passages to generate from internal knowledge
         """
-        self.llm_model = llm_model
+        self.client = OpenAI(api_key=api_key)
+        self.model = model
         self.max_generated_passages = max_generated_passages
-        
+
+    def _call_llm(self, prompt: str) -> str:
+        """
+        Call OpenAI API with the given prompt
+        Args:
+            prompt: Input prompt
+        Returns:
+            LLM response
+        """
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0
+        )
+        return response.choices[0].message.content.strip()
+
     def generate_internal_knowledge(self, question: str) -> List[Document]:
         """
         Generate passages from LLM's internal knowledge
-        Args:
-            question: The input question
-        Returns:
-            List of generated documents
         """
         prompt = f"""Generate a document that provides accurate and relevant information to answer the given
         question. If the information is unclear or uncertain, explicitly state 'I don't know' to avoid any
@@ -37,7 +53,6 @@ class AstuteRAG:
         
         response = self._call_llm(prompt)
         
-        # Create document from generated content
         if "I don't know" not in response:
             doc = Document(
                 content=response,
@@ -49,18 +64,10 @@ class AstuteRAG:
 
     def consolidate_knowledge(self, 
                             question: str,
-                            documents: List[Document],
-                            iteration: int = 1) -> List[Document]:
+                            documents: List[Document]) -> List[Document]:
         """
         Consolidate information from both internal and external documents
-        Args:
-            question: Input question
-            documents: List of documents to consolidate
-            iteration: Current iteration number
-        Returns:
-            List of consolidated documents
         """
-        # Prepare context for consolidation
         context = "\n\n".join([f"Document {i} ({doc.source}): {doc.content}" 
                              for i, doc in enumerate(documents)])
         
@@ -95,12 +102,6 @@ class AstuteRAG:
                        consolidated_docs: List[Document]) -> str:
         """
         Generate final answer based on consolidated knowledge
-        Args:
-            question: Input question
-            initial_docs: Original documents
-            consolidated_docs: Consolidated documents
-        Returns:
-            Final answer
         """
         initial_context = "\n\n".join([f"Initial Document {i} ({doc.source}): {doc.content}"
                                      for i, doc in enumerate(initial_docs)])
@@ -130,32 +131,9 @@ class AstuteRAG:
         except:
             return response
 
-    def _call_llm(self, prompt: str) -> str:
-        """
-        Call LLM API with the given prompt
-        Args:
-            prompt: Input prompt
-        Returns:
-            LLM response
-        """
-        # This is a placeholder - replace with actual LLM API call
-        # Example using OpenAI API:
-        response = openai.Completion.create(
-            model=self.llm_model,
-            prompt=prompt,
-            max_tokens=1000,
-            temperature=0
-        )
-        return response.choices[0].text.strip()
-
     def answer_question(self, question: str, retrieved_docs: List[str]) -> str:
         """
         Main method to answer a question using Astute RAG
-        Args:
-            question: Input question
-            retrieved_docs: List of retrieved passages from external source
-        Returns:
-            Final answer
         """
         # Convert retrieved docs to Document objects
         external_docs = [
@@ -177,12 +155,18 @@ class AstuteRAG:
         
         return answer
 
-# Example usage
 def main():
-    # Initialize AstuteRAG
-    rag = AstuteRAG(llm_model="gpt-4", max_generated_passages=1)
+    # API 키 설정
+    api_key = "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"  # 여기에 실제 API 키를 입력하세요
     
-    # Example question and retrieved documents
+    # AstuteRAG 초기화
+    rag = AstuteRAG(
+        api_key=api_key,
+        model="gpt-4",  # 또는 "gpt-3.5-turbo"
+        max_generated_passages=1
+    )
+    
+    # 예제 질문과 검색된 문서들
     question = "What is the capital of France?"
     retrieved_docs = [
         "Paris is the capital and largest city of France.",
@@ -190,10 +174,60 @@ def main():
         "France's political center is Paris, which became the capital in 987."
     ]
     
-    # Get answer using AstuteRAG
-    answer = rag.answer_question(question, retrieved_docs)
-    print(f"Question: {question}")
-    print(f"Answer: {answer}")
+    # 테스트할 다양한 질문과 컨텍스트 준비
+    test_cases = [
+        {
+            "question": "What is quantum computing?",
+            "retrieved_docs": [
+                "Quantum computing uses quantum phenomena like superposition and entanglement to perform calculations.",
+                "Quantum computers can solve certain problems exponentially faster than classical computers.",
+                "IBM and Google are leading companies in quantum computer development."
+            ]
+        },
+        {
+            "question": "When was the COVID-19 vaccine first administered?",
+            "retrieved_docs": [
+                "The first COVID-19 vaccine was administered in the UK on December 8, 2020, to Margaret Keenan.",
+                "Mass vaccination programs began in December 2020 across multiple countries.",
+                "Pfizer-BioNTech's vaccine was the first to receive emergency authorization."
+            ]
+        }
+    ]
+    
+    print("\n=== RAG Performance Analysis ===\n")
+
+    for i, test_case in enumerate(test_cases, 1):
+        question = test_case["question"]
+        retrieved_docs = test_case["retrieved_docs"]
+        
+        print(f"\nTest Case {i}:")
+        print(f"Question: {question}")
+        
+        print("\n1. Without RAG (Using only LLM):")
+        try:
+            # RAG 없이 내부 지식만으로 답변
+            internal_answer = rag._call_llm(f"Answer this question: {question}")
+            print(f"Answer: {internal_answer}")
+        except Exception as e:
+            print(f"Error: {str(e)}")
+            
+        print("\n2. With RAG (Using both internal knowledge and external documents):")
+        try:
+            # RAG를 사용하여 답변
+            rag_answer = rag.answer_question(question, retrieved_docs)
+            print(f"Answer: {rag_answer}")
+        except Exception as e:
+            print(f"Error: {str(e)}")
+    
+    print("\n=== RAG Improvements Analysis ===")
+    print("\nKey Benefits of Using RAG:")
+    print("1. Enhanced Accuracy: Combines LLM's internal knowledge with external sources")
+    print("2. Source Verification: Answers are grounded in specific retrieved documents")
+    print("3. Up-to-date Information: Can leverage current information from external sources")
+    print("4. Reduced Hallucination: Less likely to generate incorrect information")
+    print("5. Knowledge Conflict Resolution: Systematically handles contradictions between sources")
+    print("6. Transparent Reasoning: Can trace how answers are derived from sources")
+    print("\nNote: The actual improvements may vary depending on the specific question and retrieved documents.")
 
 if __name__ == "__main__":
     main()
